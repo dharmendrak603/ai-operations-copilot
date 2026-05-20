@@ -73,3 +73,21 @@ class DatabaseManager:
         ))
 
         self.connection.commit()
+
+    def get_workflow_history(self):
+
+        self.cursor.execute("""
+        SELECT
+            workflow_id,
+            approval_status,
+            human_approval,
+            execution_status,
+            risk_level,
+            created_at
+        FROM workflows
+        ORDER BY created_at DESC
+        """)
+
+        rows = self.cursor.fetchall()
+
+        return rows

@@ -20,6 +20,8 @@ class WorkflowManager:
         self.executor_agent = ExecutorAgent()
 
         self.db_manager = DatabaseManager()
+        self.max_retries = 3
+        
 
     def execute_workflow(self, user_input):
 
@@ -110,24 +112,48 @@ class WorkflowManager:
         # VALIDATE & PARSE REVIEWER OUTPUT
         # =========================================================
 
-        reviewer_output = reviewer_response.get("response", {})
+        reviewer_output = None
 
-        if isinstance(reviewer_output, str):
+        for attempt in range(self.max_retries):
 
             try:
 
-                reviewer_output = json.loads(reviewer_output)
+                reviewer_output = reviewer_response.get("response", {})
 
-            except Exception:
+                if isinstance(reviewer_output, str):
 
-                reviewer_output = {
-                    "approval_decision": "rejected",
-                    "risk_level": "high",
-                    "missing_considerations": [
-                        "Invalid reviewer response format"
-                    ],
-                    "summary": "Reviewer output parsing failed."
-                }
+                    reviewer_output = json.loads(reviewer_output)
+
+                WorkflowLogger.log(
+                    f"Reviewer Output Parsed Successfully | Attempt: {attempt + 1}"
+                )
+
+                break
+
+            except Exception as error:
+
+                WorkflowLogger.log(
+                    f"Reviewer Parsing Failed | Attempt: {attempt + 1} | Error: {error}"
+                )
+
+                # Retry reviewer agent
+
+                reviewer_response = self.reviewer_agent.chat(
+                    reviewer_input
+                )
+
+        # FINAL FAILSAFE
+
+        if reviewer_output is None:
+
+            reviewer_output = {
+                "approval_decision": "rejected",
+                "risk_level": "high",
+                "missing_considerations": [
+                    "Reviewer response parsing failed after retries"
+                ],
+                "summary": "Workflow automatically rejected due to invalid reviewer output."
+            }
 
         # STORE STRUCTURED REVIEWER OUTPUT
 

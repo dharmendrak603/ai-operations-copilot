@@ -19,6 +19,32 @@ while True:
     if user_input.lower() == "exit":
         break
 
+    if user_input.lower() == "show workflow history":
+
+        history = workflow_manager.db_manager.get_workflow_history()
+
+        print("\nWorkflow History:\n")
+
+        print(
+            "Workflow ID | Approval | Human Approval | "
+            "Execution | Risk | Created At"
+        )
+
+        print("-" * 100)
+
+        for row in history:
+
+            print(
+                f"{row[0]} | "
+                f"{row[1]} | "
+                f"{row[2]} | "
+                f"{row[3]} | "
+                f"{row[4]} | "
+                f"{row[5]}"
+            )
+
+        continue
+
     workflow_result = workflow_manager.execute_workflow(user_input)
 
     print("\n[bold yellow]Planner Agent Response:[/bold yellow]")
