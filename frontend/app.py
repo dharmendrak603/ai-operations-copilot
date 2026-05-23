@@ -50,7 +50,7 @@ if "workflow_input" not in st.session_state:
 st.markdown("""
 <style>
 
-/* ENTIRE APP BACKGROUND */
+/* ENTIRE APP */
 
 .stApp {
     background-color: #0B0F19;
@@ -68,7 +68,7 @@ st.markdown("""
 
 /* GLOBAL TEXT */
 
-html, body, [class*="css"]  {
+html, body, [class*="css"] {
     font-family: 'Segoe UI', sans-serif;
     color: white;
 }
@@ -101,7 +101,7 @@ section[data-testid="stSidebar"] {
 }
 
 
-/* MAIN BLOCK */
+/* MAIN CONTAINER */
 
 .block-container {
 
@@ -133,6 +133,8 @@ section[data-testid="stSidebar"] {
         0px 0px 20px rgba(0,0,0,0.35);
 
     transition: 0.3s;
+
+    color: white !important;
 }
 
 
@@ -141,6 +143,30 @@ section[data-testid="stSidebar"] {
     border: 1px solid #22C55E;
 
     transform: translateY(-2px);
+}
+
+
+/* METRIC LABELS */
+
+[data-testid="stMetricLabel"] {
+
+    color: #CBD5E1 !important;
+
+    font-size: 15px !important;
+
+    font-weight: 600 !important;
+}
+
+
+/* METRIC VALUES */
+
+[data-testid="stMetricValue"] {
+
+    color: white !important;
+
+    font-size: 28px !important;
+
+    font-weight: bold !important;
 }
 
 
@@ -199,6 +225,14 @@ textarea {
     background-color: #111827 !important;
 
     color: white !important;
+}
+
+
+/* PLACEHOLDER */
+
+textarea::placeholder {
+
+    color: #94A3B8 !important;
 }
 
 
@@ -263,7 +297,6 @@ blocked_count = len([
     row for row in history
     if row[3] == "blocked"
 ])
-
 
 st.sidebar.title("AI Operations Dashboard")
 
@@ -668,9 +701,16 @@ if history:
     )
 
     fig_pie.update_layout(
+
         paper_bgcolor="#0B0F19",
+
         plot_bgcolor="#0B0F19",
-        font_color="white"
+
+        font_color="white",
+
+        title_font_color="white",
+
+        legend_font_color="white"
     )
 
     chart_col1.plotly_chart(
@@ -700,9 +740,22 @@ if history:
     )
 
     fig_bar.update_layout(
+
         paper_bgcolor="#0B0F19",
+
         plot_bgcolor="#0B0F19",
-        font_color="white"
+
+        font_color="white",
+
+        title_font_color="white",
+
+        xaxis=dict(
+            color="white"
+        ),
+
+        yaxis=dict(
+            color="white"
+        )
     )
 
     chart_col2.plotly_chart(
@@ -741,9 +794,22 @@ if history:
     )
 
     fig_line.update_layout(
+
         paper_bgcolor="#0B0F19",
+
         plot_bgcolor="#0B0F19",
-        font_color="white"
+
+        font_color="white",
+
+        title_font_color="white",
+
+        xaxis=dict(
+            color="white"
+        ),
+
+        yaxis=dict(
+            color="white"
+        )
     )
 
     st.plotly_chart(
