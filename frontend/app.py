@@ -12,6 +12,7 @@ import pandas as pd
 import plotly.express as px
 
 from workflows.workflow_manager import WorkflowManager
+from tools.data_tools import DataTools
 
 
 # -----------------------------------
@@ -50,73 +51,41 @@ if "workflow_input" not in st.session_state:
 st.markdown("""
 <style>
 
-/* ENTIRE APP */
-
 .stApp {
     background-color: #0B0F19;
     color: white;
 }
-
-
-/* MAIN PAGE */
 
 .main {
     background-color: #0B0F19;
     color: white;
 }
 
-
-/* GLOBAL TEXT */
-
 html, body, [class*="css"] {
     font-family: 'Segoe UI', sans-serif;
     color: white;
 }
 
-
-/* REMOVE WHITE CONTAINERS */
-
 [data-testid="stAppViewContainer"] {
     background-color: #0B0F19;
 }
-
 
 [data-testid="stHeader"] {
     background-color: #0B0F19;
 }
 
-
-[data-testid="stToolbar"] {
-    right: 2rem;
-}
-
-
-/* SIDEBAR */
-
 section[data-testid="stSidebar"] {
-
     background-color: #070B12;
-
     border-right: 1px solid #1E293B;
 }
 
-
-/* MAIN CONTAINER */
-
 .block-container {
-
     padding-top: 1.5rem;
-
     padding-bottom: 2rem;
-
     max-width: 95%;
 }
 
-
-/* METRIC CARDS */
-
 [data-testid="metric-container"] {
-
     background: linear-gradient(
         145deg,
         #111827,
@@ -132,148 +101,48 @@ section[data-testid="stSidebar"] {
     box-shadow:
         0px 0px 20px rgba(0,0,0,0.35);
 
-    transition: 0.3s;
-
     color: white !important;
 }
 
-
-[data-testid="metric-container"]:hover {
-
-    border: 1px solid #22C55E;
-
-    transform: translateY(-2px);
-}
-
-
-/* METRIC LABELS */
-
 [data-testid="stMetricLabel"] {
-
     color: #CBD5E1 !important;
-
     font-size: 15px !important;
-
     font-weight: 600 !important;
 }
 
-
-/* METRIC VALUES */
-
 [data-testid="stMetricValue"] {
-
     color: white !important;
-
     font-size: 28px !important;
-
     font-weight: bold !important;
 }
 
-
-/* EXPANDERS */
-
 .streamlit-expanderHeader {
-
     background-color: #111827;
-
     border-radius: 10px;
-
     border: 1px solid #1E293B;
-
     padding: 10px;
-
     color: white;
 }
 
-
-/* BUTTONS */
-
 .stButton > button {
-
     width: 100%;
-
     border-radius: 10px;
-
     height: 3em;
-
     background-color: #111827;
-
     color: white;
-
     border: 1px solid #334155;
-
     font-weight: 600;
 }
 
-
-.stButton > button:hover {
-
-    border: 1px solid #22C55E;
-
-    color: #22C55E;
-}
-
-
-/* TEXT AREA */
-
 textarea {
-
     border-radius: 12px !important;
-
     border: 1px solid #334155 !important;
-
     background-color: #111827 !important;
-
     color: white !important;
 }
-
-
-/* PLACEHOLDER */
 
 textarea::placeholder {
-
     color: #94A3B8 !important;
-}
-
-
-/* INPUT LABELS */
-
-label, .stTextArea label {
-
-    color: white !important;
-}
-
-
-/* DATAFRAME */
-
-[data-testid="stDataFrame"] {
-
-    border-radius: 12px;
-
-    overflow: hidden;
-
-    border: 1px solid #1E293B;
-
-    background-color: #111827;
-}
-
-
-/* ALERTS */
-
-.stSuccess,
-.stInfo,
-.stWarning,
-.stError {
-
-    border-radius: 12px;
-}
-
-
-/* DIVIDERS */
-
-hr {
-
-    border-color: #1E293B;
 }
 
 </style>
@@ -319,7 +188,7 @@ st.sidebar.success("Backend Services Active")
 
 
 # -----------------------------------
-# MAIN HEADER
+# HEADER
 # -----------------------------------
 
 st.title("AI Operations Copilot")
@@ -335,16 +204,74 @@ st.caption(
 
 st.subheader("Submit Workflow Request")
 
+
+# CSV UPLOADER
+
+uploaded_file = st.file_uploader(
+    "Upload CSV File",
+    type=["csv"]
+)
+
+
+# DATA VARIABLES
+
+df = None
+
+data_profile = None
+
+summary_stats = None
+
+
+# LOAD CSV
+
+if uploaded_file:
+
+    data_result = DataTools.load_csv(
+        uploaded_file
+    )
+
+    if data_result["status"] == "success":
+
+        df = data_result["dataframe"]
+
+        st.success(
+            "CSV Uploaded Successfully"
+        )
+
+        st.subheader("Dataset Preview")
+
+        st.dataframe(
+            df.head(),
+            use_container_width=True
+        )
+
+        data_profile = (
+            DataTools.get_basic_profile(df)
+        )
+
+        summary_stats = (
+            DataTools.get_summary_statistics(df)
+        )
+
+    else:
+
+        st.error(
+            data_result["message"]
+        )
+
+
+# USER PROMPT
+
 user_input = st.text_area(
     "Enter your workflow request:",
     height=150,
-    placeholder="Example: Explain AI Agents",
+    placeholder="Example: Analyze sales trends",
     key="workflow_input"
 )
 
 
 # -----------------------------------
-# EXECUTE WORKFLOW
+# EXECUTE BUTTON
 # -----------------------------------
 
 if st.button(
@@ -360,7 +287,9 @@ if st.button(
 
             workflow_result = (
                 workflow_manager.execute_workflow(
-                    user_input
+                    user_input=user_input,
+                    data_profile=data_profile,
+                    summary_stats=summary_stats
                 )
             )
 
@@ -380,7 +309,7 @@ if st.button(
 
 
 # -----------------------------------
-# DISPLAY WORKFLOW RESULT
+# WORKFLOW RESULT
 # -----------------------------------
 
 if st.session_state.workflow_result:
@@ -388,9 +317,6 @@ if st.session_state.workflow_result:
     workflow_result = (
         st.session_state.workflow_result
     )
-
-
-    # RESET BUTTON
 
     col1, col2 = st.columns([8, 2])
 
@@ -402,34 +328,9 @@ if st.session_state.workflow_result:
 
             st.rerun()
 
-
     st.divider()
 
     st.header("Workflow Summary")
-
-
-    # STATUS COLORS
-
-    approval_color = (
-        "🟢"
-        if workflow_result["approval_status"] == "approved"
-        else "🔴"
-    )
-
-    execution_color = (
-        "🟢"
-        if workflow_result["execution_status"] == "executed"
-        else "🟡"
-    )
-
-    risk_color = (
-        "🟢"
-        if workflow_result["risk_level"] == "low"
-        else "🔴"
-    )
-
-
-    # SUMMARY METRICS
 
     col1, col2, col3, col4 = st.columns(4)
 
@@ -440,21 +341,19 @@ if st.session_state.workflow_result:
 
     col2.metric(
         "Approval",
-        f"{approval_color} {workflow_result['approval_status']}"
+        workflow_result["approval_status"]
     )
 
     col3.metric(
         "Execution",
-        f"{execution_color} {workflow_result['execution_status']}"
+        workflow_result["execution_status"]
     )
 
     col4.metric(
         "Risk",
-        f"{risk_color} {workflow_result['risk_level']}"
+        workflow_result["risk_level"]
     )
 
-
-    # DETAILS
 
     st.markdown(
         f"### Workflow ID\n`{workflow_result['workflow_id']}`"
@@ -473,32 +372,17 @@ if st.session_state.workflow_result:
 
     st.header("Agent Outputs")
 
-
-    with st.expander(
-        "🧠 Planner Agent",
-        expanded=False
-    ):
-
+    with st.expander("🧠 Planner Agent"):
         st.write(
             workflow_result["planner_response"]
         )
 
-
-    with st.expander(
-        "📊 Analyst Agent",
-        expanded=False
-    ):
-
+    with st.expander("📊 Analyst Agent"):
         st.write(
             workflow_result["analyst_response"]
         )
 
-
-    with st.expander(
-        "🛡 Reviewer Agent",
-        expanded=False
-    ):
-
+    with st.expander("🛡 Reviewer Agent"):
         st.write(
             workflow_result["reviewer_response"]
         )
@@ -522,54 +406,31 @@ if st.session_state.workflow_result:
             ["Approve", "Reject"]
         )
 
-        if st.button(
-            "Submit Human Approval",
-            use_container_width=True
-        ):
+        if st.button("Submit Human Approval"):
 
             if human_decision == "Approve":
 
-                workflow_result[
-                    "human_approval"
-                ] = "approved"
-
-                workflow_result = (
-                    workflow_manager.execute_approved_workflow(
-                        workflow_result
-                    )
+                workflow_result["human_approval"] = (
+                    "approved"
                 )
-
-                st.session_state.workflow_result = (
-                    workflow_result
-                )
-
-                st.success(
-                    "Workflow Executed Successfully"
-                )
-
-                st.rerun()
 
             else:
 
-                workflow_result[
-                    "human_approval"
-                ] = "rejected"
-
-                workflow_result = (
-                    workflow_manager.execute_approved_workflow(
-                        workflow_result
-                    )
+                workflow_result["human_approval"] = (
+                    "rejected"
                 )
 
-                st.session_state.workflow_result = (
+            workflow_result = (
+                workflow_manager.execute_approved_workflow(
                     workflow_result
                 )
+            )
 
-                st.error(
-                    "Workflow Execution Rejected"
-                )
+            st.session_state.workflow_result = (
+                workflow_result
+            )
 
-                st.rerun()
+            st.rerun()
 
 
     # -----------------------------------
@@ -582,28 +443,25 @@ if st.session_state.workflow_result:
 
         st.header("Execution Result")
 
-        executor_response = (
-            workflow_result["executor_response"]
-        )
-
         st.success(
             f"Execution Status: "
             f"{workflow_result['execution_status']}"
         )
 
         st.info(
-            str(executor_response)
+            str(
+                workflow_result["executor_response"]
+            )
         )
 
 
 # -----------------------------------
-# ANALYTICS SECTION
+# ANALYTICS
 # -----------------------------------
 
 st.divider()
 
 st.header("Operational Analytics")
-
 
 if history:
 
@@ -619,21 +477,29 @@ if history:
         ]
     )
 
+    col1, col2, col3, col4 = st.columns(4)
 
-    # KPI METRICS
-
-    total_workflows = len(history_df)
-
-    executed_count = len(
-        history_df[
-            history_df["Execution Status"] == "executed"
-        ]
+    col1.metric(
+        "Total Workflows",
+        len(history_df)
     )
 
-    blocked_count = len(
-        history_df[
-            history_df["Execution Status"] == "blocked"
-        ]
+    col2.metric(
+        "Executed",
+        len(
+            history_df[
+                history_df["Execution Status"] == "executed"
+            ]
+        )
+    )
+
+    col3.metric(
+        "Blocked",
+        len(
+            history_df[
+                history_df["Execution Status"] == "blocked"
+            ]
+        )
     )
 
     approval_rate = round(
@@ -643,29 +509,9 @@ if history:
                     history_df["Approval Status"] == "approved"
                 ]
             )
-            / total_workflows
+            / len(history_df)
         ) * 100,
         1
-    )
-
-
-    # KPI CARDS
-
-    col1, col2, col3, col4 = st.columns(4)
-
-    col1.metric(
-        "Total Workflows",
-        total_workflows
-    )
-
-    col2.metric(
-        "Executed",
-        executed_count
-    )
-
-    col3.metric(
-        "Blocked",
-        blocked_count
     )
 
     col4.metric(
@@ -673,8 +519,6 @@ if history:
         f"{approval_rate}%"
     )
 
-
-    # CHARTS
 
     chart_col1, chart_col2 = st.columns(2)
 
@@ -701,16 +545,9 @@ if history:
     )
 
     fig_pie.update_layout(
-
         paper_bgcolor="#0B0F19",
-
         plot_bgcolor="#0B0F19",
-
-        font_color="white",
-
-        title_font_color="white",
-
-        legend_font_color="white"
+        font_color="white"
     )
 
     chart_col1.plotly_chart(
@@ -740,22 +577,9 @@ if history:
     )
 
     fig_bar.update_layout(
-
         paper_bgcolor="#0B0F19",
-
         plot_bgcolor="#0B0F19",
-
-        font_color="white",
-
-        title_font_color="white",
-
-        xaxis=dict(
-            color="white"
-        ),
-
-        yaxis=dict(
-            color="white"
-        )
+        font_color="white"
     )
 
     chart_col2.plotly_chart(
@@ -764,7 +588,7 @@ if history:
     )
 
 
-    # TIMELINE CHART
+    # TIMELINE
 
     st.subheader(
         "Workflow Activity Timeline"
@@ -794,22 +618,9 @@ if history:
     )
 
     fig_line.update_layout(
-
         paper_bgcolor="#0B0F19",
-
         plot_bgcolor="#0B0F19",
-
-        font_color="white",
-
-        title_font_color="white",
-
-        xaxis=dict(
-            color="white"
-        ),
-
-        yaxis=dict(
-            color="white"
-        )
+        font_color="white"
     )
 
     st.plotly_chart(
@@ -825,7 +636,6 @@ if history:
 st.divider()
 
 st.header("Workflow History")
-
 
 if history:
 

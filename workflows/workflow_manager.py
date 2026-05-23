@@ -1,12 +1,15 @@
+import time
+
 from agents.planner_agent import PlannerAgent
 from agents.analyst_agent import AnalystAgent
 from agents.reviewer_agent import ReviewerAgent
 from agents.executor_agent import ExecutorAgent
 
 from database.db_manager import DatabaseManager
+
 from logs.logger import WorkflowLogger
 
-import json
+from tools.data_tools import DataTools
 
 
 class WorkflowManager:
@@ -23,220 +26,429 @@ class WorkflowManager:
 
         self.db_manager = DatabaseManager()
 
-        self.max_retries = 3
+        self.max_retries = 2
 
-    def execute_workflow(self, user_input):
 
-        workflow_state = {
+    # -----------------------------------
+    # MAIN WORKFLOW
+    # -----------------------------------
 
-            "workflow_id": str(id(user_input)),
+    def execute_workflow(
+        self,
+        user_input,
+        uploaded_df=None,
+        data_profile=None,
+        summary_stats=None
+    ):
 
-            "workflow_status": "started",
-
-            "approval_status": "pending",
-
-            "human_approval": "pending",
-
-            "execution_status": "pending",
-
-            "risk_level": "unknown",
-
-            "user_input": user_input,
-
-            "planner_response": None,
-
-            "analyst_response": None,
-
-            "reviewer_response": None,
-
-            "executor_response": None
-        }
-
-        WorkflowLogger.log(
-            f"Workflow Started | ID: {workflow_state['workflow_id']}"
+        workflow_id = int(
+            time.time() * 1000
         )
 
-        # STEP 1 — Planner Agent
-
-        planner_response = self.planner_agent.chat(user_input)
-
-        workflow_state["planner_response"] = planner_response
-
-        workflow_state["workflow_status"] = "planning_completed"
-
-        WorkflowLogger.log(
-            f"Planner Agent Completed | Workflow ID: {workflow_state['workflow_id']}"
+        WorkflowLogger.log_workflow_started(
+            workflow_id
         )
 
-        # STEP 2 — Analyst Agent
 
-        analyst_input = f"""
+        # -----------------------------------
+        # ADVANCED ANALYTICS
+        # -----------------------------------
+
+        top_products = None
+
+        missing_analysis = None
+
+        correlation_analysis = None
+
+        sales_trend_analysis = None
+
+
+        if uploaded_df is not None:
+
+            try:
+
+                top_products = (
+                    DataTools.top_products_analysis(
+                        uploaded_df
+                    )
+                )
+
+                missing_analysis = (
+                    DataTools.missing_value_analysis(
+                        uploaded_df
+                    )
+                )
+
+                correlation_analysis = (
+                    DataTools.correlation_analysis(
+                        uploaded_df
+                    )
+                )
+
+                sales_trend_analysis = (
+                    DataTools.sales_trend_analysis(
+                        uploaded_df
+                    )
+                )
+
+            except Exception as e:
+
+                WorkflowLogger.error(
+                    f"Analytics Error: {e}"
+                )
+
+
+        # -----------------------------------
+        # DATA CONTEXT
+        # -----------------------------------
+
+        data_context = ""
+
+        if data_profile:
+
+            data_context = f"""
+
+            Dataset Profile
+            ----------------
+
+            Rows:
+            {data_profile['rows']}
+
+            Columns:
+            {data_profile['columns']}
+
+            Column Names:
+            {data_profile['column_names']}
+
+            Missing Values:
+            {data_profile['missing_values']}
+
+            Data Types:
+            {data_profile['data_types']}
+
+            Summary Statistics:
+            {summary_stats}
+
+            Top Products Analysis:
+            {top_products}
+
+            Missing Value Analysis:
+            {missing_analysis}
+
+            Correlation Analysis:
+            {correlation_analysis}
+
+            Sales Trend Analysis:
+            {sales_trend_analysis}
+            """
+
+
+        # -----------------------------------
+        # PLANNER AGENT
+        # -----------------------------------
+
+        planner_prompt = f"""
+
+        User Request:
+        {user_input}
+
+        {data_context}
+
+        Create a structured execution plan.
+        """
+
+        planner_response = (
+            self.planner_agent.chat(
+                planner_prompt
+            )
+        )
+
+        WorkflowLogger.log_agent_completed(
+            "Planner Agent",
+            workflow_id
+        )
+
+
+        # -----------------------------------
+        # ANALYST AGENT
+        # -----------------------------------
+
+        analyst_prompt = f"""
+
+        You are a Senior AI Data Analyst.
+
         User Request:
         {user_input}
 
         Planner Output:
         {planner_response}
+
+        Dataset Profile:
+        {data_profile}
+
+        Summary Statistics:
+        {summary_stats}
+
+        Top Products Analysis:
+        {top_products}
+
+        Missing Value Analysis:
+        {missing_analysis}
+
+        Correlation Analysis:
+        {correlation_analysis}
+
+        Sales Trend Analysis:
+        {sales_trend_analysis}
+
+        Generate REAL business insights,
+        trends,
+        patterns,
+        anomalies,
+        risks,
+        recommendations,
+        and data quality observations.
+
+        Avoid generic explanations.
+        Use the computed analytics above.
         """
 
-        analyst_response = self.analyst_agent.chat(analyst_input)
-
-        workflow_state["analyst_response"] = analyst_response
-
-        workflow_state["workflow_status"] = "analysis_completed"
-
-        WorkflowLogger.log(
-            f"Analyst Agent Completed | Workflow ID: {workflow_state['workflow_id']}"
+        analyst_response = (
+            self.analyst_agent.chat(
+                analyst_prompt
+            )
         )
 
-        # STEP 3 — Reviewer Agent
+        WorkflowLogger.log_agent_completed(
+            "Analyst Agent",
+            workflow_id
+        )
 
-        reviewer_input = f"""
-        User Request:
-        {user_input}
 
-        Planner Response:
-        {planner_response}
+        # -----------------------------------
+        # REVIEWER AGENT
+        # -----------------------------------
 
-        Analyst Response:
+        reviewer_prompt = f"""
+
+        Review the following AI analysis.
+
+        Analyst Output:
         {analyst_response}
 
-        Review the overall quality, risks, and completeness.
+        Determine:
+        - approval status
+        - risk level
+        - governance concerns
+        - quality issues
         """
 
-        reviewer_response = self.reviewer_agent.chat(reviewer_input)
-
-        workflow_state["workflow_status"] = "review_completed"
-
-        WorkflowLogger.log(
-            f"Reviewer Agent Completed | Workflow ID: {workflow_state['workflow_id']}"
+        reviewer_response = (
+            self.reviewer_agent.chat(
+                reviewer_prompt
+            )
         )
 
-        # RETRY PARSING
-
-        reviewer_output = None
-
-        for attempt in range(self.max_retries):
-
-            try:
-
-                reviewer_output = reviewer_response.get(
-                    "response",
-                    {}
-                )
-
-                if isinstance(reviewer_output, str):
-
-                    reviewer_output = json.loads(
-                        reviewer_output
-                    )
-
-                WorkflowLogger.log(
-                    f"Reviewer Output Parsed Successfully | Attempt: {attempt + 1}"
-                )
-
-                break
-
-            except Exception as error:
-
-                WorkflowLogger.log(
-                    f"Reviewer Parsing Failed | Attempt: {attempt + 1} | Error: {error}"
-                )
-
-                reviewer_response = self.reviewer_agent.chat(
-                    reviewer_input
-                )
-
-        # FAILSAFE
-
-        if reviewer_output is None:
-
-            reviewer_output = {
-                "approval_decision": "rejected",
-                "risk_level": "high",
-                "missing_considerations": [
-                    "Reviewer response parsing failed after retries"
-                ],
-                "summary": (
-                    "Workflow automatically rejected due to invalid reviewer output."
-                )
-            }
-
-        workflow_state["reviewer_response"] = reviewer_output
-
-        workflow_state["approval_status"] = reviewer_output.get(
-            "approval_decision",
-            "rejected"
+        WorkflowLogger.log_agent_completed(
+            "Reviewer Agent",
+            workflow_id
         )
 
-        workflow_state["risk_level"] = reviewer_output.get(
-            "risk_level",
-            "high"
+
+        # -----------------------------------
+        # REVIEW PARSING
+        # -----------------------------------
+
+        approval_status = "approved"
+
+        risk_level = "low"
+
+
+        if isinstance(reviewer_response, dict):
+
+            review_text = str(
+                reviewer_response
+            ).lower()
+
+        else:
+
+            review_text = str(
+                reviewer_response
+            ).lower()
+
+
+        if "medium" in review_text:
+
+            risk_level = "medium"
+
+        if "high" in review_text:
+
+            risk_level = "high"
+
+
+        if (
+            "reject" in review_text
+            or
+            "rejected" in review_text
+        ):
+
+            approval_status = "rejected"
+
+
+        WorkflowLogger.info(
+
+            f"Reviewer Decision: "
+            f"{approval_status} | "
+            f"Risk Level: {risk_level}"
         )
 
-        WorkflowLogger.log(
-            f"Reviewer Decision: {workflow_state['approval_status']} | "
-            f"Risk Level: {workflow_state['risk_level']}"
-        )
+
+        # -----------------------------------
+        # BUILD WORKFLOW STATE
+        # -----------------------------------
+
+        workflow_state = {
+
+            "workflow_id": workflow_id,
+
+            "user_input": user_input,
+
+            "workflow_status": "review_completed",
+
+            "approval_status": approval_status,
+
+            "human_approval": "pending",
+
+            "execution_status": "pending",
+
+            "risk_level": risk_level,
+
+            "planner_response": planner_response,
+
+            "analyst_response": analyst_response,
+
+            "reviewer_response": reviewer_response,
+
+            "executor_response": None
+        }
+
 
         return workflow_state
 
-    def execute_approved_workflow(self, workflow_state):
 
-        if workflow_state["human_approval"] != "approved":
+    # -----------------------------------
+    # EXECUTE APPROVED WORKFLOW
+    # -----------------------------------
 
-            workflow_state["execution_status"] = "blocked"
+    def execute_approved_workflow(
+        self,
+        workflow_state
+    ):
 
-            workflow_state["executor_response"] = {
-                "execution_status": "not_executed",
-                "execution_summary": (
-                    "Execution rejected by human approval."
+        workflow_id = (
+            workflow_state["workflow_id"]
+        )
+
+
+        # -----------------------------------
+        # HUMAN REJECTED
+        # -----------------------------------
+
+        if (
+            workflow_state["human_approval"]
+            == "rejected"
+        ):
+
+            workflow_state[
+                "execution_status"
+            ] = "blocked"
+
+            workflow_state[
+                "workflow_status"
+            ] = "completed"
+
+            workflow_state[
+                "executor_response"
+            ] = {
+                "status": "blocked",
+                "reason": (
+                    "Human rejected execution."
                 )
             }
 
-            WorkflowLogger.log(
-                f"Execution Blocked | Workflow ID: {workflow_state['workflow_id']}"
+            WorkflowLogger.log_human_rejected(
+                workflow_id
             )
 
-            self.db_manager.save_workflow(workflow_state)
+            WorkflowLogger.log_workflow_completed(
+                workflow_id
+            )
+
+            self.db_manager.save_workflow(
+                workflow_state
+            )
 
             return workflow_state
 
-        # EXECUTOR
 
-        executor_input = f"""
+        # -----------------------------------
+        # EXECUTOR AGENT
+        # -----------------------------------
+
+        executor_prompt = f"""
+
+        Execute approved workflow.
+
         User Request:
         {workflow_state['user_input']}
 
-        Planner Response:
+        Planner Output:
         {workflow_state['planner_response']}
 
-        Analyst Response:
+        Analyst Output:
         {workflow_state['analyst_response']}
-
-        Reviewer Response:
-        {workflow_state['reviewer_response']}
-
-        Simulate execution of the approved task.
         """
 
-        executor_response = self.executor_agent.chat(
-            executor_input
+        executor_response = (
+            self.executor_agent.chat(
+                executor_prompt
+            )
         )
 
-        workflow_state["executor_response"] = executor_response
 
-        workflow_state["execution_status"] = "executed"
+        # -----------------------------------
+        # UPDATE STATE
+        # -----------------------------------
 
-        workflow_state["workflow_status"] = "completed"
+        workflow_state[
+            "executor_response"
+        ] = executor_response
 
-        WorkflowLogger.log(
-            f"Execution Completed | Workflow ID: {workflow_state['workflow_id']}"
+        workflow_state[
+            "execution_status"
+        ] = "executed"
+
+        workflow_state[
+            "workflow_status"
+        ] = "completed"
+
+
+        WorkflowLogger.log_execution_completed(
+            workflow_id
         )
 
-        WorkflowLogger.log(
-            f"Workflow Completed | ID: {workflow_state['workflow_id']}"
+        WorkflowLogger.log_workflow_completed(
+            workflow_id
         )
 
-        self.db_manager.save_workflow(workflow_state)
+
+        # -----------------------------------
+        # SAVE DATABASE
+        # -----------------------------------
+
+        self.db_manager.save_workflow(
+            workflow_state
+        )
+
 
         return workflow_state
