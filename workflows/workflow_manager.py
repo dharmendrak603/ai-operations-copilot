@@ -1,3 +1,4 @@
+
 import time
 
 from agents.planner_agent import PlannerAgent
@@ -28,10 +29,9 @@ class WorkflowManager:
 
         self.max_retries = 2
 
-
-    # -----------------------------------
+    # =====================================================
     # MAIN WORKFLOW
-    # -----------------------------------
+    # =====================================================
 
     def execute_workflow(
         self,
@@ -49,44 +49,18 @@ class WorkflowManager:
             workflow_id
         )
 
+        # =================================================
+        # ANALYTICS ENGINE
+        # =================================================
 
-        # -----------------------------------
-        # ADVANCED ANALYTICS
-        # -----------------------------------
-
-        top_products = None
-
-        missing_analysis = None
-
-        correlation_analysis = None
-
-        sales_trend_analysis = None
-
+        analysis_results = None
 
         if uploaded_df is not None:
 
             try:
 
-                top_products = (
-                    DataTools.top_products_analysis(
-                        uploaded_df
-                    )
-                )
-
-                missing_analysis = (
-                    DataTools.missing_value_analysis(
-                        uploaded_df
-                    )
-                )
-
-                correlation_analysis = (
-                    DataTools.correlation_analysis(
-                        uploaded_df
-                    )
-                )
-
-                sales_trend_analysis = (
-                    DataTools.sales_trend_analysis(
+                analysis_results = (
+                    DataTools.run_analysis(
                         uploaded_df
                     )
                 )
@@ -94,13 +68,17 @@ class WorkflowManager:
             except Exception as e:
 
                 WorkflowLogger.error(
-                    f"Analytics Error: {e}"
+                    f"Analytics Engine Error: {e}"
                 )
 
+                analysis_results = {
+                    "status": "error",
+                    "message": str(e)
+                }
 
-        # -----------------------------------
+        # =================================================
         # DATA CONTEXT
-        # -----------------------------------
+        # =================================================
 
         data_context = ""
 
@@ -108,54 +86,58 @@ class WorkflowManager:
 
             data_context = f"""
 
-            Dataset Profile
-            ----------------
+DATASET PROFILE
+----------------
 
-            Rows:
-            {data_profile['rows']}
+Rows:
+{data_profile['rows']}
 
-            Columns:
-            {data_profile['columns']}
+Columns:
+{data_profile['columns']}
 
-            Column Names:
-            {data_profile['column_names']}
+Column Names:
+{data_profile['column_names']}
 
-            Missing Values:
-            {data_profile['missing_values']}
+Missing Values:
+{data_profile['missing_values']}
 
-            Data Types:
-            {data_profile['data_types']}
+Data Types:
+{data_profile['data_types']}
 
-            Summary Statistics:
-            {summary_stats}
+SUMMARY STATISTICS
+------------------
 
-            Top Products Analysis:
-            {top_products}
+{summary_stats}
 
-            Missing Value Analysis:
-            {missing_analysis}
+REAL_ANALYTICS_RESULTS
+----------------------
 
-            Correlation Analysis:
-            {correlation_analysis}
+{analysis_results}
+"""
 
-            Sales Trend Analysis:
-            {sales_trend_analysis}
-            """
-
-
-        # -----------------------------------
+        # =================================================
         # PLANNER AGENT
-        # -----------------------------------
+        # =================================================
 
         planner_prompt = f"""
 
-        User Request:
-        {user_input}
+You are a Workflow Planning Agent.
 
-        {data_context}
+USER REQUEST:
+{user_input}
 
-        Create a structured execution plan.
-        """
+DATA CONTEXT:
+{data_context}
+
+YOUR RESPONSIBILITIES:
+- Understand user intent
+- Identify analytical objectives
+- Identify potential risks
+- Create structured execution plan
+- Determine what insights should be generated
+
+Keep response concise and structured.
+"""
 
         planner_response = (
             self.planner_agent.chat(
@@ -168,50 +150,59 @@ class WorkflowManager:
             workflow_id
         )
 
-
-        # -----------------------------------
+        # =================================================
         # ANALYST AGENT
-        # -----------------------------------
+        # =================================================
 
         analyst_prompt = f"""
 
-        You are a Senior AI Data Analyst.
+You are a Senior Enterprise AI Data Analyst.
 
-        User Request:
-        {user_input}
+USER REQUEST:
+{user_input}
 
-        Planner Output:
-        {planner_response}
+PLANNER OUTPUT:
+{planner_response}
 
-        Dataset Profile:
-        {data_profile}
+DATA CONTEXT:
+{data_context}
 
-        Summary Statistics:
-        {summary_stats}
+IMPORTANT RULES:
+- Use REAL_ANALYTICS_RESULTS as the source of truth
+- NEVER invent KPI values
+- NEVER hallucinate metrics
+- Use concise executive formatting
+- Prefer bullet points
+- Mention trends, anomalies, and risks
+- Focus on business value
+- Mention data quality concerns when relevant
 
-        Top Products Analysis:
-        {top_products}
+RESPONSE FORMAT:
 
-        Missing Value Analysis:
-        {missing_analysis}
+EXECUTIVE SUMMARY
+- concise overview
 
-        Correlation Analysis:
-        {correlation_analysis}
+KPI HIGHLIGHTS
+- metric 1
+- metric 2
+- metric 3
 
-        Sales Trend Analysis:
-        {sales_trend_analysis}
+KEY INSIGHTS
+- insight 1
+- insight 2
 
-        Generate REAL business insights,
-        trends,
-        patterns,
-        anomalies,
-        risks,
-        recommendations,
-        and data quality observations.
+DATA QUALITY ISSUES
+- issue 1
+- issue 2
 
-        Avoid generic explanations.
-        Use the computed analytics above.
-        """
+RISKS
+- risk 1
+- risk 2
+
+RECOMMENDATIONS
+- recommendation 1
+- recommendation 2
+"""
 
         analyst_response = (
             self.analyst_agent.chat(
@@ -224,24 +215,33 @@ class WorkflowManager:
             workflow_id
         )
 
-
-        # -----------------------------------
+        # =================================================
         # REVIEWER AGENT
-        # -----------------------------------
+        # =================================================
 
         reviewer_prompt = f"""
 
-        Review the following AI analysis.
+You are an AI Governance and Quality Reviewer.
 
-        Analyst Output:
-        {analyst_response}
+USER REQUEST:
+{user_input}
 
-        Determine:
-        - approval status
-        - risk level
-        - governance concerns
-        - quality issues
-        """
+ANALYST RESPONSE:
+{analyst_response}
+
+YOUR RESPONSIBILITIES:
+- Detect hallucinations
+- Detect weak analytical logic
+- Detect governance concerns
+- Detect unsupported claims
+- Evaluate business risk
+- Evaluate data quality awareness
+
+RETURN:
+- approval decision
+- risk level
+- reviewer comments
+"""
 
         reviewer_response = (
             self.reviewer_agent.chat(
@@ -254,28 +254,17 @@ class WorkflowManager:
             workflow_id
         )
 
-
-        # -----------------------------------
+        # =================================================
         # REVIEW PARSING
-        # -----------------------------------
+        # =================================================
 
         approval_status = "approved"
 
         risk_level = "low"
 
-
-        if isinstance(reviewer_response, dict):
-
-            review_text = str(
-                reviewer_response
-            ).lower()
-
-        else:
-
-            review_text = str(
-                reviewer_response
-            ).lower()
-
+        review_text = str(
+            reviewer_response
+        ).lower()
 
         if "medium" in review_text:
 
@@ -285,7 +274,6 @@ class WorkflowManager:
 
             risk_level = "high"
 
-
         if (
             "reject" in review_text
             or
@@ -294,7 +282,6 @@ class WorkflowManager:
 
             approval_status = "rejected"
 
-
         WorkflowLogger.info(
 
             f"Reviewer Decision: "
@@ -302,10 +289,9 @@ class WorkflowManager:
             f"Risk Level: {risk_level}"
         )
 
-
-        # -----------------------------------
-        # BUILD WORKFLOW STATE
-        # -----------------------------------
+        # =================================================
+        # WORKFLOW STATE
+        # =================================================
 
         workflow_state = {
 
@@ -332,13 +318,11 @@ class WorkflowManager:
             "executor_response": None
         }
 
-
         return workflow_state
 
-
-    # -----------------------------------
+    # =====================================================
     # EXECUTE APPROVED WORKFLOW
-    # -----------------------------------
+    # =====================================================
 
     def execute_approved_workflow(
         self,
@@ -349,10 +333,9 @@ class WorkflowManager:
             workflow_state["workflow_id"]
         )
 
-
-        # -----------------------------------
-        # HUMAN REJECTED
-        # -----------------------------------
+        # ================================================
+        # HUMAN REJECTION
+        # ================================================
 
         if (
             workflow_state["human_approval"]
@@ -390,24 +373,25 @@ class WorkflowManager:
 
             return workflow_state
 
-
-        # -----------------------------------
+        # ================================================
         # EXECUTOR AGENT
-        # -----------------------------------
+        # ================================================
 
         executor_prompt = f"""
 
-        Execute approved workflow.
+Execute approved workflow.
 
-        User Request:
-        {workflow_state['user_input']}
+USER REQUEST:
+{workflow_state['user_input']}
 
-        Planner Output:
-        {workflow_state['planner_response']}
+PLANNER OUTPUT:
+{workflow_state['planner_response']}
 
-        Analyst Output:
-        {workflow_state['analyst_response']}
-        """
+ANALYST OUTPUT:
+{workflow_state['analyst_response']}
+
+Generate concise execution summary.
+"""
 
         executor_response = (
             self.executor_agent.chat(
@@ -415,10 +399,9 @@ class WorkflowManager:
             )
         )
 
-
-        # -----------------------------------
+        # ================================================
         # UPDATE STATE
-        # -----------------------------------
+        # ================================================
 
         workflow_state[
             "executor_response"
@@ -432,7 +415,6 @@ class WorkflowManager:
             "workflow_status"
         ] = "completed"
 
-
         WorkflowLogger.log_execution_completed(
             workflow_id
         )
@@ -441,14 +423,12 @@ class WorkflowManager:
             workflow_id
         )
 
-
-        # -----------------------------------
+        # ================================================
         # SAVE DATABASE
-        # -----------------------------------
+        # ================================================
 
         self.db_manager.save_workflow(
             workflow_state
         )
-
 
         return workflow_state

@@ -3,11 +3,6 @@ import pandas as pd
 
 class DataTools:
 
-
-    # -----------------------------------
-    # LOAD CSV
-    # -----------------------------------
-
     @staticmethod
     def load_csv(uploaded_file):
 
@@ -26,11 +21,6 @@ class DataTools:
                 "status": "error",
                 "message": str(e)
             }
-
-
-    # -----------------------------------
-    # BASIC PROFILE
-    # -----------------------------------
 
     @staticmethod
     def get_basic_profile(df):
@@ -54,11 +44,6 @@ class DataTools:
 
         return profile
 
-
-    # -----------------------------------
-    # SUMMARY STATISTICS
-    # -----------------------------------
-
     @staticmethod
     def get_summary_statistics(df):
 
@@ -76,174 +61,255 @@ class DataTools:
 
             return str(e)
 
-
-    # -----------------------------------
-    # TOP PRODUCTS ANALYSIS
-    # -----------------------------------
+    # =========================================================
+    # NEW KPI ENGINE
+    # =========================================================
 
     @staticmethod
-    def top_products_analysis(df):
+    def find_matching_column(df, possible_names):
 
-        possible_product_cols = [
-            "product",
-            "product_name",
-            "category"
-        ]
-
-        possible_quantity_cols = [
-            "quantity",
-            "qty"
-        ]
-
-        product_col = None
-        quantity_col = None
-
-
-        for col in df.columns:
-
-            if col.lower() in possible_product_cols:
-
-                product_col = col
-
-            if col.lower() in possible_quantity_cols:
-
-                quantity_col = col
-
-
-        if (
-            product_col
-            and
-            quantity_col
-        ):
-
-            result = (
-
-                df.groupby(product_col)[quantity_col]
-                .sum()
-                .sort_values(ascending=False)
-                .head(10)
-            )
-
-            return result.to_dict()
-
-
-        return {
-            "message":
-            "No suitable product columns found."
+        normalized_columns = {
+            col.lower().replace(" ", "").replace("_", ""): col
+            for col in df.columns
         }
 
+        for name in possible_names:
 
-    # -----------------------------------
-    # MISSING VALUE ANALYSIS
-    # -----------------------------------
+            normalized_name = (
+                name.lower()
+                .replace(" ", "")
+                .replace("_", "")
+            )
 
-    @staticmethod
-    def missing_value_analysis(df):
+            if normalized_name in normalized_columns:
+                return normalized_columns[normalized_name]
 
-        missing = (
-
-            df.isnull()
-            .sum()
-            .sort_values(ascending=False)
-        )
-
-        return missing.to_dict()
-
-
-    # -----------------------------------
-    # CORRELATION ANALYSIS
-    # -----------------------------------
+        return None
 
     @staticmethod
-    def correlation_analysis(df):
+    def clean_numeric_column(df, column_name):
 
         try:
 
-            numeric_df = (
-                df.select_dtypes(
-                    include=["number"]
+            return (
+                df[column_name]
+                .astype(str)
+                .replace(r'[\$,]', '', regex=True)
+                .astype(float)
+            )
+
+        except Exception:
+            return pd.Series([0] * len(df))
+
+    @staticmethod
+    def calculate_kpis(df):
+
+        kpis = {}
+
+        try:
+
+            # =====================================================
+            # DETECT IMPORTANT COLUMNS
+            # =====================================================
+
+            total_price_col = DataTools.find_matching_column(
+                df,
+                [
+                    "totalprice",
+                    "total_price",
+                    "amount",
+                    "revenue",
+                    "sales"
+                ]
+            )
+
+            quantity_col = DataTools.find_matching_column(
+                df,
+                [
+                    "quantity",
+                    "qty",
+                    "units"
+                ]
+            )
+
+            product_col = DataTools.find_matching_column(
+                df,
+                [
+                    "product",
+                    "productname",
+                    "item"
+                ]
+            )
+
+            payment_status_col = DataTools.find_matching_column(
+                df,
+                [
+                    "paymentstatus",
+                    "status",
+                    "payment_status"
+                ]
+            )
+
+            customer_col = DataTools.find_matching_column(
+                df,
+                [
+                    "customerid",
+                    "customer_id",
+                    "customer"
+                ]
+            )
+
+            # =====================================================
+            # TOTAL ORDERS
+            # =====================================================
+
+            kpis["total_orders"] = len(df)
+
+            # =====================================================
+            # TOTAL REVENUE
+            # =====================================================
+
+            total_revenue = 0
+
+            if total_price_col:
+
+                revenue_series = DataTools.clean_numeric_column(
+                    df,
+                    total_price_col
                 )
+
+                total_revenue = revenue_series.sum()
+
+            kpis["total_revenue"] = round(total_revenue, 2)
+
+            # =====================================================
+            # AVG ORDER VALUE
+            # =====================================================
+
+            if len(df) > 0:
+
+                avg_order_value = (
+                    total_revenue / len(df)
+                )
+
+            else:
+                avg_order_value = 0
+
+            kpis["avg_order_value"] = round(
+                avg_order_value,
+                2
             )
 
-            correlation = (
-                numeric_df.corr()
-                .round(2)
+            # =====================================================
+            # TOTAL QUANTITY
+            # =====================================================
+
+            total_quantity = 0
+
+            if quantity_col:
+
+                quantity_series = DataTools.clean_numeric_column(
+                    df,
+                    quantity_col
+                )
+
+                total_quantity = quantity_series.sum()
+
+            kpis["total_quantity"] = round(
+                total_quantity,
+                2
             )
 
-            return correlation.to_dict()
+            # =====================================================
+            # UNIQUE CUSTOMERS
+            # =====================================================
+
+            if customer_col:
+
+                kpis["unique_customers"] = (
+                    df[customer_col]
+                    .nunique()
+                )
+
+            else:
+
+                kpis["unique_customers"] = "N/A"
+
+            # =====================================================
+            # PAYMENT COMPLETION RATE
+            # =====================================================
+
+            if payment_status_col:
+
+                paid_count = (
+                    df[payment_status_col]
+                    .astype(str)
+                    .str.lower()
+                    .str.contains("paid")
+                    .sum()
+                )
+
+                payment_completion_rate = (
+                    paid_count / len(df)
+                ) * 100
+
+                kpis["payment_completion_rate"] = (
+                    round(payment_completion_rate, 2)
+                )
+
+            else:
+
+                kpis["payment_completion_rate"] = "N/A"
+
+            # =====================================================
+            # TOP PRODUCT
+            # =====================================================
+
+            if product_col and total_price_col:
+
+                temp_df = df.copy()
+
+                temp_df["__revenue__"] = (
+                    DataTools.clean_numeric_column(
+                        temp_df,
+                        total_price_col
+                    )
+                )
+
+                grouped = (
+                    temp_df
+                    .groupby(product_col)["__revenue__"]
+                    .sum()
+                    .sort_values(ascending=False)
+                )
+
+                if len(grouped) > 0:
+
+                    kpis["top_product"] = grouped.index[0]
+
+                    kpis["top_product_revenue"] = round(
+                        grouped.iloc[0],
+                        2
+                    )
+
+                else:
+
+                    kpis["top_product"] = "N/A"
+                    kpis["top_product_revenue"] = 0
+
+            else:
+
+                kpis["top_product"] = "N/A"
+                kpis["top_product_revenue"] = 0
+
+            return {
+                "status": "success",
+                "kpis": kpis
+            }
 
         except Exception as e:
 
             return {
-                "error": str(e)
+                "status": "error",
+                "message": str(e)
             }
-
-
-    # -----------------------------------
-    # SALES TREND ANALYSIS
-    # -----------------------------------
-
-    @staticmethod
-    def sales_trend_analysis(df):
-
-        possible_date_cols = [
-            "date",
-            "order_date",
-            "created_at"
-        ]
-
-        possible_sales_cols = [
-            "sales",
-            "amount",
-            "revenue",
-            "price"
-        ]
-
-        date_col = None
-        sales_col = None
-
-
-        for col in df.columns:
-
-            if col.lower() in possible_date_cols:
-
-                date_col = col
-
-            if col.lower() in possible_sales_cols:
-
-                sales_col = col
-
-
-        if (
-            date_col
-            and
-            sales_col
-        ):
-
-            try:
-
-                df[date_col] = pd.to_datetime(
-                    df[date_col]
-                )
-
-                trend = (
-
-                    df.groupby(
-                        df[date_col].dt.date
-                    )[sales_col]
-                    .sum()
-                )
-
-                return trend.to_dict()
-
-            except Exception as e:
-
-                return {
-                    "error": str(e)
-                }
-
-
-        return {
-            "message":
-            "No suitable sales/date columns found."
-        }
